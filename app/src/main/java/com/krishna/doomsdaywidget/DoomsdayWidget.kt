@@ -17,8 +17,8 @@ import java.time.temporal.ChronoUnit
 class DoomsdayWidget : AppWidgetProvider() {
 
     companion object {
-        // Target: 18 Dec 2026, 00:00 (phone local time). Change here if needed.
-        private val TARGET: LocalDateTime = LocalDateTime.of(2026, 12, 18, 0, 0, 0)
+        // Target: 17 Dec 2026, 00:00 (phone local time). Change here if needed.
+        private val TARGET: LocalDateTime = LocalDateTime.of(2026, 12, 17, 0, 0, 0)
         private const val ACTION_TICK = "com.krishna.doomsdaywidget.TICK"
         private const val HOUR_MS = 3_600_000L
 
