@@ -19,13 +19,13 @@
         android:gravity="bottom|center_horizontal"
         android:paddingLeft="10dp"
         android:paddingRight="10dp"
-        android:paddingBottom="12dp">
+        android:paddingBottom="8dp">
 
         <TextView
             android:id="@+id/title"
             android:layout_width="wrap_content"
             android:layout_height="wrap_content"
-            android:layout_marginBottom="4dp"
+            android:layout_marginBottom="2dp"
             android:fontFamily="sans-serif-medium"
             android:letterSpacing="0.05"
             android:text="DOOMSDAY IS COMING"
@@ -56,6 +56,8 @@
                 <Chronometer
                     android:id="@+id/chrono"
                     style="@style/DNum"
+                    android:letterSpacing="0.3"
+                    android:paddingLeft="8dp"
                     android:text="00:00" />
                 <LinearLayout android:layout_width="match_parent" android:layout_height="wrap_content" android:orientation="horizontal">
                     <TextView style="@style/DLab" android:text="MINUTES" />
