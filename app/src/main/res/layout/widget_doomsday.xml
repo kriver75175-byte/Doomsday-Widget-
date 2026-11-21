@@ -11,15 +11,11 @@
         android:scaleType="centerCrop"
         android:src="@drawable/bg_doom" />
 
-    <View
-        android:layout_width="match_parent"
-        android:layout_height="match_parent"
-        android:background="@drawable/widget_shade" />
-
     <LinearLayout
         android:layout_width="match_parent"
         android:layout_height="match_parent"
         android:orientation="vertical"
+        android:background="@drawable/widget_shade"
         android:gravity="bottom|center_horizontal"
         android:paddingLeft="10dp"
         android:paddingRight="10dp"
