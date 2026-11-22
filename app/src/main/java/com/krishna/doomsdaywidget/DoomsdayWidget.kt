@@ -11,6 +11,7 @@ import android.graphics.BitmapFactory
 import android.os.Build
 import android.os.SystemClock
 import android.util.SizeF
+import android.view.View
 import android.widget.RemoteViews
 import java.io.File
 import java.time.Duration
@@ -24,6 +25,11 @@ class DoomsdayWidget : AppWidgetProvider() {
         private val TARGET: LocalDateTime = LocalDateTime.of(2026, 12, 17, 0, 0, 0)
         private const val ACTION_TICK = "com.krishna.doomsdaywidget.TICK"
         private const val HOUR_MS = 3_600_000L
+        const val FRAMES = 12
+        private val frameIds = intArrayOf(
+            R.id.f0, R.id.f1, R.id.f2, R.id.f3, R.id.f4, R.id.f5,
+            R.id.f6, R.id.f7, R.id.f8, R.id.f9, R.id.f10, R.id.f11
+        )
 
         private fun pad(n: Long) = n.toString().padStart(2, '0')
 
@@ -45,6 +51,16 @@ class DoomsdayWidget : AppWidgetProvider() {
             val f = File(ctx.filesDir, if (small) "bg_small.jpg" else "bg_large.jpg")
             if (f.exists()) {
                 BitmapFactory.decodeFile(f.path)?.let { rv.setImageViewBitmap(R.id.bg, it) }
+            }
+
+            // Custom 2-sec video loop (frames saved by the app), if any
+            val tag = if (small) "s" else "l"
+            val files = (0 until FRAMES).map { File(ctx.filesDir, "f_${tag}_$it.jpg") }
+            if (files.all { it.exists() }) {
+                rv.setViewVisibility(R.id.flipper, View.VISIBLE)
+                files.forEachIndexed { i, file ->
+                    BitmapFactory.decodeFile(file.path)?.let { rv.setImageViewBitmap(frameIds[i], it) }
+                }
             }
 
             if (!now.isBefore(TARGET)) {

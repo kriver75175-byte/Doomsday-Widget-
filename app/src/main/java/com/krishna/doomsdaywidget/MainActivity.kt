@@ -5,6 +5,7 @@ import android.content.Intent
 import android.graphics.Bitmap
 import android.graphics.BitmapFactory
 import android.graphics.ImageDecoder
+import android.media.MediaMetadataRetriever
 import android.net.Uri
 import android.os.Build
 import android.os.Bundle
@@ -20,6 +21,7 @@ import java.io.FileOutputStream
 class MainActivity : Activity() {
 
     private val reqPick = 1
+    private val reqVideo = 2
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
@@ -38,12 +40,17 @@ class MainActivity : Activity() {
             text = "Photo chuno"
             setOnClickListener { pickPhoto() }
         }
+        val video = Button(this).apply {
+            text = "Video chuno (2 sec loop)"
+            setOnClickListener { pickVideo() }
+        }
         val reset = Button(this).apply {
             text = "Default photo wapas"
             setOnClickListener { resetPhoto() }
         }
         root.addView(info)
         root.addView(pick)
+        root.addView(video)
         root.addView(reset)
         setContentView(root)
     }
@@ -60,9 +67,56 @@ class MainActivity : Activity() {
         startActivityForResult(i, reqPick)
     }
 
+    private fun pickVideo() {
+        val i = Intent(Intent.ACTION_GET_CONTENT).apply {
+            type = "video/*"
+            addCategory(Intent.CATEGORY_OPENABLE)
+        }
+        startActivityForResult(i, reqVideo)
+    }
+
+    private fun clearFrames() {
+        for (i in 0 until DoomsdayWidget.FRAMES) {
+            File(filesDir, "f_l_$i.jpg").delete()
+            File(filesDir, "f_s_$i.jpg").delete()
+        }
+    }
+
+    // First 2 seconds of the video -> 12 frames (6 fps), saved for the widget
+    private fun extractFrames(uri: Uri): Boolean {
+        val r = MediaMetadataRetriever()
+        try {
+            r.setDataSource(this, uri)
+            val durMs = r.extractMetadata(MediaMetadataRetriever.METADATA_KEY_DURATION)
+                ?.toLongOrNull() ?: 0L
+            if (durMs <= 0L) return false
+            val spanUs = minOf(durMs, 2000L) * 1000L
+            val n = DoomsdayWidget.FRAMES
+            val large = ArrayList<Bitmap>()
+            val small = ArrayList<Bitmap>()
+            for (i in 0 until n) {
+                val fr = r.getFrameAtTime(spanUs * i / n, MediaMetadataRetriever.OPTION_CLOSEST)
+                    ?: return false
+                large.add(cropTo(fr, 400, 225))
+                small.add(cropTo(fr, 300, 300))
+            }
+            clearFrames()
+            for (i in 0 until n) {
+                save(large[i], "f_l_$i.jpg")
+                save(small[i], "f_s_$i.jpg")
+            }
+            return true
+        } catch (e: Exception) {
+            return false
+        } finally {
+            r.release()
+        }
+    }
+
     private fun resetPhoto() {
         File(filesDir, "bg_large.jpg").delete()
         File(filesDir, "bg_small.jpg").delete()
+        clearFrames()
         DoomsdayWidget.refresh(this)
         Toast.makeText(this, "Default photo wapas aa gayi", Toast.LENGTH_SHORT).show()
     }
@@ -70,8 +124,24 @@ class MainActivity : Activity() {
     @Suppress("DEPRECATION")
     override fun onActivityResult(requestCode: Int, resultCode: Int, data: Intent?) {
         super.onActivityResult(requestCode, resultCode, data)
-        if (requestCode != reqPick || resultCode != RESULT_OK) return
+        if (resultCode != RESULT_OK) return
         val uri = data?.data ?: return
+        if (requestCode == reqVideo) {
+            Toast.makeText(this, "Video process ho rahi hai...", Toast.LENGTH_SHORT).show()
+            Thread {
+                val ok = extractFrames(uri)
+                runOnUiThread {
+                    if (ok) DoomsdayWidget.refresh(this)
+                    Toast.makeText(
+                        this,
+                        if (ok) "Video set ho gayi" else "Video load nahi hui",
+                        Toast.LENGTH_SHORT
+                    ).show()
+                }
+            }.start()
+            return
+        }
+        if (requestCode != reqPick) return
         Thread {
             val bmp = loadBitmap(uri)
             if (bmp == null) {
@@ -80,6 +150,7 @@ class MainActivity : Activity() {
                 }
                 return@Thread
             }
+            clearFrames()
             save(cropTo(bmp, 640, 360), "bg_large.jpg")
             save(cropTo(bmp, 480, 480), "bg_small.jpg")
             runOnUiThread {
