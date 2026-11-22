@@ -7,9 +7,12 @@ import android.appwidget.AppWidgetProvider
 import android.content.ComponentName
 import android.content.Context
 import android.content.Intent
+import android.graphics.BitmapFactory
 import android.os.Build
 import android.os.SystemClock
+import android.util.SizeF
 import android.widget.RemoteViews
+import java.io.File
 import java.time.Duration
 import java.time.LocalDateTime
 import java.time.temporal.ChronoUnit
@@ -24,47 +27,73 @@ class DoomsdayWidget : AppWidgetProvider() {
 
         private fun pad(n: Long) = n.toString().padStart(2, '0')
 
+        // Millis until the next top-of-hour boundary (counted back from TARGET).
+        private fun toBoundary(now: LocalDateTime): Long {
+            val remainingMs = Duration.between(now, TARGET).toMillis()
+            val m = remainingMs % HOUR_MS
+            return if (m == 0L) HOUR_MS - 1 else m
+        }
+
+        private fun build(ctx: Context, small: Boolean, now: LocalDateTime): RemoteViews {
+            val rv = RemoteViews(
+                ctx.packageName,
+                if (small) R.layout.widget_doomsday_small else R.layout.widget_doomsday
+            )
+            rv.setChronometerCountDown(R.id.chrono, true)
+
+            // Custom background photo chosen in the app (if any)
+            val f = File(ctx.filesDir, if (small) "bg_small.jpg" else "bg_large.jpg")
+            if (f.exists()) {
+                BitmapFactory.decodeFile(f.path)?.let { rv.setImageViewBitmap(R.id.bg, it) }
+            }
+
+            if (!now.isBefore(TARGET)) {
+                rv.setTextViewText(R.id.title, "DOOMSDAY IS HERE")
+                if (!small) rv.setTextViewText(R.id.mo, "00")
+                rv.setTextViewText(R.id.d, "00")
+                rv.setTextViewText(R.id.h, "00")
+                rv.setChronometer(R.id.chrono, SystemClock.elapsedRealtime(), null, false)
+                return rv
+            }
+
+            rv.setTextViewText(R.id.title, "DOOMSDAY IS COMING")
+            if (small) {
+                // 2x2: total days + hours
+                val days = ChronoUnit.DAYS.between(now, TARGET)
+                val hours = ChronoUnit.HOURS.between(now.plusDays(days), TARGET)
+                rv.setTextViewText(R.id.d, pad(days))
+                rv.setTextViewText(R.id.h, pad(hours))
+            } else {
+                val months = ChronoUnit.MONTHS.between(now, TARGET)
+                var cur = now.plusMonths(months)
+                val days = ChronoUnit.DAYS.between(cur, TARGET)
+                cur = cur.plusDays(days)
+                val hours = ChronoUnit.HOURS.between(cur, TARGET)
+                rv.setTextViewText(R.id.mo, pad(months))
+                rv.setTextViewText(R.id.d, pad(days))
+                rv.setTextViewText(R.id.h, pad(hours))
+            }
+            // Chronometer ticks minutes:seconds by itself, no app work needed.
+            rv.setChronometer(
+                R.id.chrono, SystemClock.elapsedRealtime() + toBoundary(now), null, true
+            )
+            return rv
+        }
+
         fun refresh(ctx: Context) {
             val mgr = AppWidgetManager.getInstance(ctx)
             val ids = mgr.getAppWidgetIds(ComponentName(ctx, DoomsdayWidget::class.java))
             if (ids.isEmpty()) return
 
-            val rv = RemoteViews(ctx.packageName, R.layout.widget_doomsday)
             val now = LocalDateTime.now()
-
-            if (!now.isBefore(TARGET)) {
-                rv.setTextViewText(R.id.title, "DOOMSDAY IS HERE")
-                rv.setTextViewText(R.id.mo, "00")
-                rv.setTextViewText(R.id.d, "00")
-                rv.setTextViewText(R.id.h, "00")
-                rv.setChronometerCountDown(R.id.chrono, true)
-                rv.setChronometer(R.id.chrono, SystemClock.elapsedRealtime(), null, false)
-                mgr.updateAppWidget(ids, rv)
-                return
-            }
-
-            val months = ChronoUnit.MONTHS.between(now, TARGET)
-            var cur = now.plusMonths(months)
-            val days = ChronoUnit.DAYS.between(cur, TARGET)
-            cur = cur.plusDays(days)
-            val hours = ChronoUnit.HOURS.between(cur, TARGET)
-
-            rv.setTextViewText(R.id.title, "DOOMSDAY IS COMING")
-            rv.setTextViewText(R.id.mo, pad(months))
-            rv.setTextViewText(R.id.d, pad(days))
-            rv.setTextViewText(R.id.h, pad(hours))
-
-            // Chronometer counts down minutes:seconds to the next top-of-hour
-            // boundary (counted back from the target), so it ticks every second
-            // without the app doing any work.
-            val remainingMs = Duration.between(now, TARGET).toMillis()
-            var toBoundary = remainingMs % HOUR_MS
-            if (toBoundary == 0L) toBoundary = HOUR_MS - 1
-            rv.setChronometerCountDown(R.id.chrono, true)
-            rv.setChronometer(R.id.chrono, SystemClock.elapsedRealtime() + toBoundary, null, true)
+            val large = build(ctx, false, now)
+            val rv = if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.S) {
+                val small = build(ctx, true, now)
+                RemoteViews(mapOf(SizeF(100f, 100f) to small, SizeF(300f, 60f) to large))
+            } else large
 
             mgr.updateAppWidget(ids, rv)
-            schedule(ctx, toBoundary + 500)
+            if (now.isBefore(TARGET)) schedule(ctx, toBoundary(now) + 500)
         }
 
         private fun pending(ctx: Context): PendingIntent {
